@@ -70,14 +70,6 @@ plugs:
     interface: content
     content: npu-libs-2404
     target: $SNAP/npu-libs
-  alsa:
-    interface: alsa
-  pulseaudio:
-    interface: pulseaudio
-  audio-playback:
-    interface: audio-playback
-  audio-record:
-    interface: audio-record
 
 apps:
   audacity:
