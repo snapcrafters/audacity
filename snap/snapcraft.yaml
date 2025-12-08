@@ -1,5 +1,5 @@
 name: audacity
-version: 3.7.5
+version: 3.7.6
 adopt-info: audacity
 description: |
   Audacity® is a free, easy-to-use, multi-track audio editor and recorder for Windows,
@@ -70,7 +70,14 @@ plugs:
     interface: content
     content: npu-libs-2404
     target: $SNAP/npu-libs
-
+  alsa:
+    interface: alsa
+  pulseaudio:
+    interface: pulseaudio
+  audio-playback:
+    interface: audio-playback
+  audio-record:
+    interface: audio-record
 
 apps:
   audacity:
