@@ -146,6 +146,8 @@ parts:
         wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.4.1%2Bcpu.zip
         mkdir -p ${CRAFT_PART_INSTALL}/usr/local
         unzip libtorch-cxx11-abi-shared-with-deps-2.4.1+cpu.zip -d ${CRAFT_PART_INSTALL}/usr/local
+        strip --strip-unneeded ${CRAFT_PART_INSTALL}/usr/local/libtorch/lib/libtorch_cpu.so
+        strip --strip-unneeded ${CRAFT_PART_INSTALL}/usr/local/libtorch/lib/libtorch_python.so
       fi
 
   opencl:
