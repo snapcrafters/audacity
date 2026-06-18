@@ -1,6 +1,9 @@
 name: Update
 
 on:
+  # Runs at 10:00 UTC every day
+  schedule:
+    - cron:  '0 10 * * *'
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -19,5 +22,11 @@ jobs:
         with:
           token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
           update-script: |
-            VERSION=$(curl -s "https://api.github.com/repos/audacity/audacity/releases/latest" | jq -r .tag_name | tr -d 'Audacity-')
+            VERSION=$(
+              curl -sL "https://api.github.com/repos/audacity/audacity/releases" |
+              jq -r '.[] | select(.prerelease == false and .draft == false) | .tag_name' |
+              grep -v beta |
+              head -n 1 |
+              sed 's/^Audacity-//'
+            )
             sed -i 's/^\(version: \).*$/\1'"$VERSION"'/' snap/snapcraft.yaml
