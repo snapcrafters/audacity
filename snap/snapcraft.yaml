@@ -14,19 +14,6 @@ description: |
   * Change the speed or pitch of a recording
   * Apply a wide range of other effects to audio recordings
 
-  This snap also includes OpenVINO™ AI plugins for music separation, noise suppression,
-  music generation and continuation, transcription, and super resolution. These plugins
-  can only be run on Intel hardware (CPU, GPU, and NPU) and a user must be in the render
-  Unix group in order to run on Intel accelerators (GPU and NPU). To ease the installation
-  of the AI models, the snap also includes a model management command that can be run using:
-
-  sudo audacity.fetch-models
-
-  For Intel NPU support, make sure to also run the following prior to running Audacity:
-
-  sudo snap install intel-npu-driver
-  sudo snap connect audacity:npu-libs intel-npu-driver:npu-libs
-
 website: https://www.audacityteam.org/
 contact: https://github.com/snapcrafters/audacity/issues
 issues: https://github.com/snapcrafters/audacity/issues
@@ -39,217 +26,175 @@ base: core24
 compression: lzo
 
 platforms:
- amd64:
- arm64:
+  amd64:
+  arm64:
 
 layout:
   /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/alsa-lib:
     bind: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/alsa-lib
-  /usr/lib/x86_64-linux-gnu/audacity:
-    bind: $SNAP/usr/lib/x86_64-linux-gnu/audacity
   /usr/share/alsa:
     bind: $SNAP/usr/share/alsa
   /usr/share/audacity:
     bind: $SNAP/usr/share/audacity
   /usr/share/locale:
     bind: $SNAP/usr/share/locale
-  $SNAP/usr/lib/openvino-models:
-    bind: $SNAP_COMMON/models/openvino-models
-  /etc/gitconfig:
-    bind-file: $SNAP_DATA/etc/gitconfig
-  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/intel-opencl:
-    bind: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/intel-opencl
-
-package-repositories:
-  - type: apt
-    ppa: kobuk-team/intel-graphics
-    key-id: 0C0E6AF955CE463C03FC51574D098D70AFBE5E1F
 
 plugs:
   ffmpeg-2404:
     interface: content
     target: ffmpeg-platform
     default-provider: ffmpeg-2404
-  intel-npu:
-    interface: custom-device
-    custom-device: intel-npu-device
-  npu-libs:
-    interface: content
-    content: npu-libs-2404
-    target: $SNAP/npu-libs
 
 apps:
   audacity:
-    extensions: [gnome]
+    extensions: [kde-neon-6]
     command: usr/bin/audacity
-    command-chain:
-    - snap/command-chain/alsa-launch
-    desktop: usr/share/applications/audacity.desktop
+    desktop: usr/share/applications/org.audacityteam.Audacity.desktop
     common-id: org.audacityteam.Audacity
     plugs:
       - alsa
       - audio-playback
       - audio-record
       - home
-      - intel-npu
       - jack1
       - network
       - network-bind
-      - npu-libs
       - pulseaudio
       - removable-media
-      - unity7
     environment:
-      LD_LIBRARY_PATH: $SNAP/usr/local/lib:$SNAP/usr/local/whisper.cpp/lib:$SNAP/usr/local/libtorch/lib:$SNAP/usr/runtime/lib/intel64:$SNAP/npu-libs:$SNAP/ffmpeg-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
-      OCL_ICD_VENDORS: $SNAP/etc/OpenCL/vendors
+      LD_LIBRARY_PATH: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/audacity:$SNAP/ffmpeg-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
       PATH: $SNAP/ffmpeg-platform/usr/bin:$PATH
 
-  fetch-models:
-    command: usr/bin/fetch-models
-    plugs:
-      - network
-    environment:
-      GIT_EXEC_PATH: $SNAP/usr/lib/git-core
-      GIT_TEMPLATE_DIR: $SNAP/usr/share/git-core/templates
-
 parts:
-  alsa-mixin:
-    plugin: dump
-    source: https://github.com/diddlesnaps/snapcraft-alsa.git
-    source-subdir: snapcraft-assets
-    build-packages:
-      - libasound2-dev
-    stage-packages:
-      - libasound2t64
-      - libasound2-plugins
-      - yad
-
-  openvino-tokenizers-extension:
-    source-type: git
-    source: https://github.com/openvinotoolkit/openvino_tokenizers
-    source-tag: 2024.6.0.0
-    plugin: cmake
-    cmake-parameters:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DCMAKE_INSTALL_PREFIX=/usr
-    build-packages:
-      - libtbb-dev
-    build-snaps:
-      - openvino-toolkit-2404/2024/stable
-    build-environment:
-      - OpenVINO_DIR: /snap/openvino-toolkit-2404/current/usr/lib/x86_64-linux-gnu/cmake
-    override-build: |
-      if [ "$CRAFT_ARCH_BUILD_FOR" == "amd64" ]; then
-        craftctl default
-      fi
-
-  libtorch:
-    plugin: nil
-    build-packages:
-      - wget
-      - unzip
-    override-build: |
-      if [ "$CRAFT_ARCH_BUILD_FOR" == "amd64" ]; then
-        wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.4.1%2Bcpu.zip
-        mkdir -p ${CRAFT_PART_INSTALL}/usr/local
-        unzip libtorch-cxx11-abi-shared-with-deps-2.4.1+cpu.zip -d ${CRAFT_PART_INSTALL}/usr/local
-        strip --strip-unneeded ${CRAFT_PART_INSTALL}/usr/local/libtorch/lib/*.so
-        strip --strip-unneeded ${CRAFT_PART_INSTALL}/usr/local/libtorch/lib/*.a
-      fi
-
-  intel-graphics:
-    plugin: nil
-    stage-packages:
-      - to amd64:
-        - libigc-tools
-        - libigc2
-        - libigdfcl2
-        - intel-ocloc
-        - intel-opencl-icd
-        - libze1
-        - libze-intel-gpu1
-        - libigdgmm12
-        # Note, these -dev packages deliver development sym links that
-        # may be dynamically loaded by Intel compute runtime drivers.
-        - libigc-dev
-        - libigdfcl-dev
-    prime:
-      - -usr/include
-      - -usr/share
-    organize:
-      # move ligigdgmm so it is not removed by mesa-2404 cleanup step in the gnome/GPU extension
-      usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libigdgmm.so*: usr/local/lib/
-
-  whisper.cpp:
-    after:
-      - libtorch
-    source-type: git
-    source: https://github.com/ggerganov/whisper.cpp
-    source-tag: v1.5.4
-    plugin: cmake
-    override-build: |
-      if [ "$CRAFT_ARCH_BUILD_FOR" == "amd64" ]; then
-        cmake ${CRAFT_PART_SRC} -DWHISPER_OPENVINO=ON
-        make -j $(nproc)
-        cmake --install . --config Release --prefix ${CRAFT_PART_INSTALL}/usr/local/whisper.cpp
-      fi
-    build-snaps:
-      - openvino-toolkit-2404/2024/stable
-    build-environment:
-      - LIBTORCH_ROOTDIR: $CRAFT_STAGE/usr/local/libtorch
-      - OpenVINO_DIR: /snap/openvino-toolkit-2404/current/usr/lib/x86_64-linux-gnu/cmake
-
   audacity:
-    after:
-      - alsa-mixin
-      - openvino-tokenizers-extension
-      - libtorch
-      - whisper.cpp
     plugin: cmake
     source: https://github.com/audacity/audacity.git
     source-tag: Audacity-$SNAPCRAFT_PROJECT_VERSION
-    parse-info: [usr/share/metainfo/audacity.appdata.xml]
+    source-type: git
+    source-depth: 1
+    parse-info: [usr/share/metainfo/org.audacityteam.Audacity.appdata.xml]
     override-pull: |
       craftctl default
-      sed -i -E 's|Icon=.*|Icon=/usr/share/icons/hicolor/scalable/apps/audacity.svg|' src/audacity.desktop.in
-      sed -i -E 's|Exec=env GDK_BACKEND=x11 UBUNTU_MENUPROXY=0 |Exec=|' src/audacity.desktop.in
-      # mod-opus broken with "Error: inappropriate ioctl for device". This disables it.
-      sed -i '/mod-opus/d' libraries/lib-module-manager/ModuleSettings.cpp
-      if [ "$CRAFT_ARCH_BUILD_FOR" == "amd64" ]; then
-        sed -i '/mod-opus/d' libraries/lib-module-manager/ModuleSettings.cpp
-        sed -i '/"mod-aup",/a\      "mod-openvino",' libraries/lib-module-manager/ModuleSettings.cpp
-        git clone --depth 1 --branch v3.7.1-R4.2 https://github.com/intel/openvino-plugins-ai-audacity.git
-        cp -r openvino-plugins-ai-audacity/mod-openvino ${CRAFT_PART_SRC}/modules/
-        sed -i '/   sharing/a\    mod-openvino' ${CRAFT_PART_SRC}/modules/CMakeLists.txt
-      fi
+      git submodule update --init --recursive --depth 1
+      # Fix: unique_ptr<QFile> in map requires complete type
+      sed -i 's/^class QFile;$//' muse/framework/global/io/internal/filesystem.h
+      sed -i '/#include <mutex>/a #include <QFile>' muse/framework/global/io/internal/filesystem.h
+      # Fix: QMetaEnum used by value requires complete type
+      sed -i '/#include <QJSValue>/a #include <QMetaEnum>' muse/framework/global/api/apiutils.h
+      # Fix: QFontMetricsF needs explicit include in Qt 6.11
+      sed -i '/#include "themeapi.h"/a #include <QFontMetrics>' muse/framework/ui/api/themeapi.cpp
+      # Fix: QLocale needs explicit include
+      sed -i '/#include "global\/dataformatter.h"/a #include <QLocale>' muse/framework/ui/view/qmldataformatter.cpp
+      # Fix: QPainter used by value needs complete type
+      sed -i '/#include "widgetstyle.h"/a #include <QPainter>' muse/framework/ui/view/widgetstyle.cpp
+      # Fix: QAction used by value in KDDockWidgets needs complete type
+      sed -i '/#include <QTimer>/a #include <QAction>' muse/framework/dockwindow/thirdparty/KDDockWidgets/src/DockWidgetBase.cpp
+      # Fix: QTimer used by value needs complete type
+      sed -i '/#include <QRandomGenerator>/a #include <QTimer>' muse/framework/cloud/internal/abstractcloudservice.cpp
+      # Fix: QCoreApplication used but not included
+      sed -i '/#include "log.h"/a #include <QCoreApplication>' muse/framework/multiwindows/internal/singleprocess/singleprocessprovider.cpp
+      # Fix: Manifest type used but not included
+      sed -i '/#include "scriptengine.h"/a #include "../extensionstypes.h"' muse/framework/extensions/internal/extensionsession.h
+      # Fix: QMetaEnum used but not included
+      sed -i '/#include <QUrl>/a #include <QMetaEnum>' muse/framework/interactive/api/interactiveapi.cpp
+      # Fix: QTimer and QRegularExpression used but not included
+      sed -i '/#include "abstractnavigation.h"/a #include <QTimer>' muse/framework/ui/qml/Muse/Ui/initialletternavigation.h
+      sed -i '/#include "navigationpanel.h"/a #include <QRegularExpression>' muse/framework/ui/qml/Muse/Ui/initialletternavigation.cpp
+      # Fix: QQmlEngine used but not included
+      sed -i '/#include <QWindow>/a #include <QQmlEngine>' muse/framework/interactive/internal/interactive.cpp
+      # Fix: QTimer used but not included
+      sed -i '/#include <QSet>/a #include <QTimer>' muse/framework/uicomponents/qml/Muse/UiComponents/abstracttableviewmodel.cpp
+      # Fix: QVariant used but not included
+      sed -i '/#include <qqmlintegration.h>/a #include <QVariant>' muse/framework/uicomponents/qml/Muse/UiComponents/filteredflyoutmodel.h
+      sed -i '/#include <qqmlintegration.h>/a #include <QVariant>' muse/framework/multiwindows/qml/Muse/MultiWindows/multiinstancesdevmodel.h
+      # Fix: QCursor used but not included
+      sed -i '/#include <QMouseEvent>/a #include <QCursor>' muse/framework/uicomponents/qml/Muse/UiComponents/polylineplot.cpp
+      # Fix: QWindow used as pointer metatype needs complete type
+      sed -i '/#include <qqmlintegration.h>/a #include <QWindow>' muse/framework/interactive/qml/Muse/Interactive/interactiveprovidermodel.h
+      # Fix: QWindow used but not included
+      sed -i '/#include <QFileDialog>/a #include <QWindow>' src/project/internal/projectactionscontroller.cpp
+      # Fix: muse::qtrc needs translation header
+      sed -i '/#include "ui\/internal\/themeconverter.h"/a #include "framework/global/translation.h"' src/appshell/qml/Audacity/AppShell/FirstLaunchSetup/themespagemodel.cpp
+      # Fix: QPixmap used by value needs complete type
+      sed -i '/#include <QObject>/a #include <QPixmap>' src/project/view/projectthumbnailloader.h
+      # Fix: qmlRegisterType needs QQmlEngine in Qt6
+      sed -i '/#include "view\/clipgainmodel.h"/a #include <QQmlEngine>' src/automation/automationmodule.cpp
+      # Fix: QDateTime used but not included
+      sed -i '/#include "framework\/global\/types\/retval.h"/a #include <QDateTime>' src/au3cloud/view/accountmodel.cpp
+      # Fix: qmlRegisterType needs QQmlEngine in Qt6
+      sed -i '/#include "effects\/effects_base\/ieffectviewlaunchregister.h"/a #include <QQmlEngine>' src/effects/builtin_collection/builtineffectscollectionmodule.cpp
+      # Fix: qmlRegister* functions need QQmlEngine in Qt6 - add to all files that use them
+      sed -i '1i #include <QQmlEngine>' src/uicomponents/uicomponentsmodule.cpp src/playback/playbackmodule.cpp src/trackedit/trackeditmodule.cpp src/au3cloud/au3cloudmodule.cpp src/spectrogram/spectrogrammodule.cpp src/effects/effects_base/effectsmodule.cpp src/effects/builtin_collection/internal/builtincollectionloader.cpp src/effects/builtin/builtineffectsmodule.cpp src/preferences/preferencesmodule.cpp src/importexport/labels/labelsmodule.cpp src/importexport/export/exportermodule.cpp src/project/projectmodule.cpp src/projectscene/projectscenemodule.cpp src/record/recordmodule.cpp
+      # Fix: nyquistpromptloader needs QQmlEngine, QJSEngine, and type declarations
+      sed -i '/#include "au3-effects\/LoadEffects.h"/a #include <QQmlEngine>\n#include <QJSEngine>\n#include "nyquistpromptviewmodel.h"\n#include "nyquistprompteffect.h"\n#include "au3wrap/internal/wxtypes_convert.h"' src/effects/nyquist/nyquistprompt/nyquistpromptloader.cpp
+      # Fix: qmlRegisterSingletonType needs QQmlEngine and QJSEngine in Qt6
+      sed -i '/#include "framework\/uicomponents\/qml\/Muse\/UiComponents\/menuitem.h"/a #include <QQmlEngine>\n#include <QJSEngine>' src/effects/effects_base/view/effectsviewutils.h
+      # Fix: std::array needs <array> include
+      sed -i '/#include <algorithm>/a #include <array>' src/playback/internal/meters/dblogmeter.cpp
+      # Fix: QCursor used but not included
+      sed -i '/#include <QGuiApplication>/a #include <QCursor>' src/preferences/qml/Audacity/Preferences/preferencesmodel.cpp
+      sed -i '/#include <QGuiApplication>/a #include <QCursor>' src/projectscene/view/timeline/playregioncontroller.cpp
+      # Fix: QTimer used by value needs complete type
+      sed -i '/#include "effects\/effects_base\/ieffectinstancesregister.h"/a #include <QTimer>' src/effects/lv2/view/lv2viewmodel.h
+      # Fix: std::string needs <string> include
+      sed -i '/#include <vector>/a #include <string>' src/projectscene/view/trackruler/itrackruler.h
+      # Fix: std::array needs <array> include
+      sed -i '/#include <cassert>/a #include <array>' src/projectscene/view/trackruler/linearbaseruler.cpp
     cmake-parameters:
       - -DCMAKE_INSTALL_PREFIX=/usr
       - -DCMAKE_BUILD_TYPE=Release
-      - -DAUDACITY_BUILD_LEVEL=2
-      - -Daudacity_obey_system_dependencies=On
-      - -Daudacity_conan_enabled=Off
-      - -Daudacity_lib_preference=system
-      - -Daudacity_has_networking=Off
-      - -Daudacity_has_sentry_reporting=Off
-      - -Daudacity_has_crashreports=Off
-      - -Daudacity_has_updates_check=Off
-      - -Daudacity_use_ffmpeg=loaded
-      - -Daudacity_has_vst3=Off
-      - -Daudacity_has_tests=Off
-      - -DwxBUILD_TOOLKIT=gtk3
+      - -DAU4_BUILD_MODE=release
+      - -DAU4_BUILD_CONFIGURATION=app
+      - -DMUSE_ENABLE_UNIT_TESTS=Off
+      - -DMUSE_COMPILE_USE_PCH=Off
+      - -DMUSE_COMPILE_USE_CCACHE=Off
+      - -DMUSE_COMPILE_USE_UNITY=Off
+      - -DMUSE_MODULE_DIAGNOSTICS_CRASHPAD_CLIENT=Off
+      - -DAU_RUN_LRELEASE=Off
+      - -DAU_MODULE_EFFECTS_VST=On
+      - -DAU_MODULE_EFFECTS_NYQUIST=On
+      - -DAU_MODULE_EFFECTS_LV2=On
+      - -DAU_USE_SBSMS=On
+      - -DAU_USE_SOUNDTOUCH=On
     build-environment:
-      - PATH: /snap/bin:$PATH
       - CFLAGS: -O2 -pipe
       - CXXFLAGS: -O2 -pipe
-      - LIBTORCH_ROOTDIR: $CRAFT_STAGE/usr/local/libtorch
-      - OpenVINO_DIR: /snap/openvino-toolkit-2404/current/usr/lib/x86_64-linux-gnu/cmake
-      - WHISPERCPP_ROOTDIR: $CRAFT_STAGE/usr/local/whisper.cpp
+    override-build: |
+      QT6_INC=/snap/kde-qt6-core24-sdk/current/usr/include/$CRAFT_ARCH_TRIPLET_BUILD_FOR/qt6
+      # Only add the Qt6 module include dirs that the muse framework needs
+      # (adding ALL dirs causes conflicts, e.g. Qt3DInput::QAction vs QtGui::QAction)
+      EXTRA_FLAGS=""
+      for mod in QtCore QtCore5Compat QtGui QtQml QtQmlIntegration QtQuick QtQuickControls2 QtQuickWidgets QtQuickTest QtQuickShapes QtQuick3D QtNetwork QtNetworkAuth QtWidgets QtSvg QtXml QtSql QtDBus QtConcurrent QtPrintSupport QtShaderTools; do
+        if [ -d "$QT6_INC/$mod" ]; then
+          EXTRA_FLAGS="$EXTRA_FLAGS -isystem $QT6_INC/$mod"
+        fi
+      done
+      export CXXFLAGS="$CXXFLAGS $EXTRA_FLAGS"
+      export CFLAGS="$CFLAGS $EXTRA_FLAGS"
+      cmake -S $CRAFT_PART_SRC -B $CRAFT_PART_BUILD -G "Unix Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DAU4_BUILD_MODE=release \
+        -DAU4_BUILD_CONFIGURATION=app \
+        -DMUSE_ENABLE_UNIT_TESTS=Off \
+        -DMUSE_COMPILE_USE_PCH=Off \
+        -DMUSE_COMPILE_USE_CCACHE=Off \
+        -DMUSE_COMPILE_USE_UNITY=Off \
+        -DMUSE_MODULE_DIAGNOSTICS_CRASHPAD_CLIENT=Off \
+        -DAU_RUN_LRELEASE=Off \
+        -DAU_MODULE_EFFECTS_VST=On \
+        -DAU_MODULE_EFFECTS_NYQUIST=On \
+        -DAU_MODULE_EFFECTS_LV2=On \
+        -DAU_USE_SBSMS=On \
+        -DAU_USE_SOUNDTOUCH=On
+      cmake --build $CRAFT_PART_BUILD -- -j$CRAFT_PARALLEL_BUILD_COUNT
+      DESTDIR=$CRAFT_PART_INSTALL cmake --install $CRAFT_PART_BUILD
     build-packages:
       - build-essential
       - cmake
       - curl
       - gettext
-      - jq
+      - libasound2-dev
       - libavcodec-dev
       - libavformat-dev
       - libavutil-dev
@@ -257,111 +202,82 @@ parts:
       - libexpat1-dev
       - libflac++-dev
       - libflac-dev
+      - libfontconfig1-dev
+      - libfreetype6-dev
+      - libgl1-mesa-dev
       - libgstreamer-plugins-base1.0-dev
       - libgstreamer-plugins-good1.0-dev
       - libgstreamer1.0-dev
       - libgtk-3-dev
-      - libid3tag0-dev
+      - libharfbuzz-dev
       - libjack-jackd2-dev
-      - libjpeg-turbo8-dev
-      - liblilv-dev
-      - libmad0-dev
+      - libduktape207
       - libmp3lame-dev
       - libmpg123-dev
+      - libnss3-dev
       - libogg-dev
       - libopus-dev
       - libopusfile-dev
-      - libportmidi-dev
-      - libportsmf-dev
+      - libpng-dev
       - libpulse-dev
-      - libsbsms-dev
-      - libserd-dev
+      - libpugixml-dev
       - libsndfile1-dev
-      - libsord-dev
-      - libsoundtouch-dev
-      - libsoxr-dev
-      - libsqlite3-dev
-      - libsratom-dev
-      - libsuil-dev
-      - libtwolame-dev
+      - libudev-dev
+      - libutfcpp-dev
       - libvorbis-dev
       - libwavpack-dev
       - libwxgtk3.2-dev
-      - lv2-dev
-      - nasm
-      - ocl-icd-opencl-dev
+      - ninja-build
+      - patchelf
+      - pkg-config
       - portaudio19-dev
       - python3-pip
       - rapidjson-dev
-      - re2c
       - uuid-dev
-      - vamp-plugin-sdk
       - wget
       - zlib1g
       - zlib1g-dev
-    build-snaps:
-      - openvino-toolkit-2404/2024/stable
     stage-packages:
+      - libasound2t64
+      - libasound2-plugins
       - libavcodec60
       - libavformat60
       - libavutil58
       - libcurl4
-      - libdouble-conversion3
       - libexpat1
       - libflac12t64
       - libflac++10
+      - libfontconfig1
+      - libfreetype6
       - libgl1
-      - libglvnd0
-      - libglx0
       - libgstreamer-plugins-base1.0-0
       - libgstreamer-plugins-good1.0-0
       - libgstreamer1.0-0
-      - libid3tag0
       - libjack-jackd2-0
-      - libjpeg-turbo8
-      - liblilv-0-0
       - libmad0
       - libmp3lame0
-      - libopus0
+      - libmpg123-0t64
+      - libnss3
       - libogg0
-      - libpcre2-16-0
+      - libopus0
+      - libopusfile0
       - libportaudio2
-      - libportmidi0
-      - libportsmf0t64
       - libpulse0
-      - libqt5core5a
-      - libqt5gui5
-      - libqt5widgets5
       - libsbsms10
-      - libserd-0-0
       - libsndfile1
-      - libsord-0-0
       - libsoundtouch1
       - libsoxr0
       - libsqlite3-0
-      - libsratom-0-0
-      - libsuil-0-0
       - libtwolame0
       - libuuid1
-      - libvamp-hostsdk3v5
-      - libvamp-sdk2v5
       - libvorbis0a
       - libvorbisenc2
+      - libvorbisfile3
+      - libwavpack1
       - libwxgtk3.2-1t64
+      - libxkbcommon0
       - zlib1g
-    stage-snaps:
-      - openvino-toolkit-2404/2024/stable
-
-  fetch-models:
-    plugin: dump
-    source: bin/
-    organize:
-      fetch-models: usr/bin/fetch-models
-    # fetch-models exits immediately if not run on Intel hardware,
-    # thus we don't need these packages in the part for arm64
-    stage-packages:
-      - to amd64:
-        - git
-        - git-lfs
-        - unzip
-        - wget
+    prime:
+      - -usr/include
+      - -usr/share/doc
+      - -usr/share/man
