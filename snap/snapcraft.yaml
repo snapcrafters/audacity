@@ -49,6 +49,8 @@ apps:
   audacity:
     extensions: [kde-neon-6]
     command: usr/bin/audacity
+    command-chain:
+      - snap/command-chain/audio-plug-check
     desktop: usr/share/applications/org.audacityteam.Audacity.desktop
     common-id: org.audacityteam.Audacity
     plugs:
@@ -66,6 +68,22 @@ apps:
       PATH: $SNAP/ffmpeg-platform/usr/bin:$PATH
 
 parts:
+  audio-notice:
+    plugin: nil
+    source: snap/local/audio-notice
+    override-build: |
+      QT6_INC=/snap/kde-qt6-core24-sdk/current/usr/include/$CRAFT_ARCH_TRIPLET_BUILD_FOR/qt6
+      QT6_LIB=/snap/kde-qt6-core24-sdk/current/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+      mkdir -p "$CRAFT_PART_INSTALL/bin" "$CRAFT_PART_INSTALL/snap/command-chain"
+      # NOTE: source file BEFORE the -l flags - ld resolves libraries in
+      # order, so libs listed first are discarded before the object's
+      # symbols are seen (classic "undefined reference to everything" bug).
+      g++ -O2 -std=c++17 -fPIC \
+          -I"$QT6_INC" -I"$QT6_INC/QtCore" -I"$QT6_INC/QtGui" -I"$QT6_INC/QtWidgets" \
+          "$CRAFT_PART_SRC/audio_notice.cpp" -o "$CRAFT_PART_INSTALL/bin/audio-notice" \
+          -L"$QT6_LIB" -lQt6Widgets -lQt6Gui -lQt6Core
+      install -m755 "$CRAFT_PART_SRC/audio-plug-check" \
+        "$CRAFT_PART_INSTALL/snap/command-chain/audio-plug-check"
   audacity:
     plugin: cmake
     source: https://github.com/audacity/audacity.git
