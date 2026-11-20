@@ -22,35 +22,34 @@ jobs:
     outputs:
       architectures: ${{ steps.get-architectures.outputs.architectures }}
       architectures-list: ${{ steps.get-architectures.outputs.architectures-list }}
-      track: ${{ github.ref_name == '3' && '3' || 'latest' }}
-      environment: ${{ github.ref_name == '3' && '3 Branch' || 'Candidate Branch' }}
     steps:
       - name: 🖥 Get snap architectures
         id: get-architectures
         uses: snapcrafters/ci/get-architectures@main
 
-  release:
-    name: 🚢 Release to ${{ needs.get-architectures.outputs.track }}/candidate
+  release-latest:
+    name: 🚢 Release to latest/candidate
+    if: github.ref == 'refs/heads/candidate'
     needs: get-architectures
     runs-on: ubuntu-latest
-    environment: ${{ needs.get-architectures.outputs.environment }}
+    environment: "Candidate Branch"
     strategy:
       matrix:
         architecture: ${{ fromJSON(needs.get-architectures.outputs.architectures-list) }}
     steps:
-      - name: 🚢 Release to candidate channel
+      - name: 🚢 Release to latest/candidate
         uses: snapcrafters/ci/release-to-candidate@main
         with:
-          channel: ${{ needs.get-architectures.outputs.track }}/candidate
+          channel: latest/candidate
           architecture: ${{ matrix.architecture }}
           launchpad-token: ${{ secrets.LP_BUILD_SECRET }}
           repo-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
           store-token: ${{ secrets.SNAP_STORE_CANDIDATE }}
 
-  call-for-testing:
-    name: 📣 Create call for testing
-    needs: [release, get-architectures]
-    environment: ${{ needs.get-architectures.outputs.environment }}
+  call-for-testing-latest:
+    name: 📣 Create call for testing (latest)
+    needs: [release-latest, get-architectures]
+    environment: "Candidate Branch"
     runs-on: ubuntu-latest
     outputs:
       issue-number: ${{ steps.issue.outputs.issue-number }}
@@ -59,21 +58,71 @@ jobs:
         id: issue
         uses: snapcrafters/ci/call-for-testing@main
         with:
-          channel: ${{ needs.get-architectures.outputs.track }}/candidate
-          promotion-channel: ${{ needs.get-architectures.outputs.track }}/stable
+          channel: latest/candidate
+          promotion-channel: latest/stable
           architectures: ${{ needs.get-architectures.outputs.architectures }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  screenshots:
-    name: 📸 Gather screenshots
-    needs: [call-for-testing, get-architectures]
-    environment: ${{ needs.get-architectures.outputs.environment }}
+  screenshots-latest:
+    name: 📸 Gather screenshots (latest)
+    needs: call-for-testing-latest
+    environment: "Candidate Branch"
     runs-on: ubuntu-latest
     steps:
       - name: 📸 Gather screenshots
         uses: snapcrafters/ci/get-screenshots@main
         with:
-          channel: ${{ needs.get-architectures.outputs.track }}/candidate
-          issue-number: ${{ needs.call-for-testing.outputs.issue-number }}
+          channel: latest/candidate
+          issue-number: ${{ needs.call-for-testing-latest.outputs.issue-number }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          screenshots-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
+
+  release-3:
+    name: 🚢 Release to 3/candidate
+    if: github.ref == 'refs/heads/3'
+    needs: get-architectures
+    runs-on: ubuntu-latest
+    environment: "3 Branch"
+    strategy:
+      matrix:
+        architecture: ${{ fromJSON(needs.get-architectures.outputs.architectures-list) }}
+    steps:
+      - name: 🚢 Release to 3/candidate
+        uses: snapcrafters/ci/release-to-candidate@main
+        with:
+          channel: 3/candidate
+          architecture: ${{ matrix.architecture }}
+          launchpad-token: ${{ secrets.LP_BUILD_SECRET }}
+          repo-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
+          store-token: ${{ secrets.SNAP_STORE_CANDIDATE }}
+
+  call-for-testing-3:
+    name: 📣 Create call for testing (3)
+    needs: [release-3, get-architectures]
+    environment: "3 Branch"
+    runs-on: ubuntu-latest
+    outputs:
+      issue-number: ${{ steps.issue.outputs.issue-number }}
+    steps:
+      - name: 📣 Create call for testing
+        id: issue
+        uses: snapcrafters/ci/call-for-testing@main
+        with:
+          channel: 3/candidate
+          promotion-channel: 3/stable
+          architectures: ${{ needs.get-architectures.outputs.architectures }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  screenshots-3:
+    name: 📸 Gather screenshots (3)
+    needs: call-for-testing-3
+    environment: "3 Branch"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📸 Gather screenshots
+        uses: snapcrafters/ci/get-screenshots@main
+        with:
+          channel: 3/candidate
+          issue-number: ${{ needs.call-for-testing-3.outputs.issue-number }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           screenshots-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}

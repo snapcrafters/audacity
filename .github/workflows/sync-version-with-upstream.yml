@@ -12,37 +12,63 @@ concurrency:
 permissions:
   contents: read
 
+# Run both update jobs from the default branch.
 jobs:
-  sync:
-    name: 🔄 Sync Audacity ${{ matrix.major }} (${{ matrix.branch }})
-    # Scheduled runs and both branch updates are coordinated from the default branch.
+  sync-candidate:
+    name: 🔄 Sync Audacity 4 (candidate)
     if: github.ref == 'refs/heads/candidate'
-    environment: ${{ matrix.environment }}
+    environment: "Candidate Branch"
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - branch: candidate
-            environment: Candidate Branch
-            major: "4"
-          - branch: "3"
-            environment: 3 Branch
-            major: "3"
     steps:
       - name: 🔄 Sync version with upstream
         uses: snapcrafters/ci/sync-version@main
         env:
           GH_TOKEN: ${{ github.token }}
-          AUDACITY_MAJOR: ${{ matrix.major }}
+          AUDACITY_MAJOR: "4"
         with:
-          branch: ${{ matrix.branch }}
+          branch: "candidate"
           token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
           update-script: |
             set -euo pipefail
 
             current=$(sed -nE 's/^version: ["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?$/\1/p' snap/snapcraft.yaml)
-            # Do not bump the legacy candidate recipe to 4 before its packaging migration.
+            # Do not bump the legacy recipe to 4 before its packaging migration.
+            if [[ ! "$current" =~ ^${AUDACITY_MAJOR}\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Skipping: the recipe is not on Audacity $AUDACITY_MAJOR."
+              exit 0
+            fi
+
+            version=$(gh api --paginate 'repos/audacity/audacity/releases?per_page=100' \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+              sed -nE "s/^Audacity-(${AUDACITY_MAJOR}\.[0-9]+\.[0-9]+)$/\1/p" |
+              sort -V | tail -n 1)
+            if [[ -z "$version" ]]; then
+              echo "No stable Audacity $AUDACITY_MAJOR release found." >&2
+              exit 1
+            fi
+            if [[ "$version" != "$current" && "$(printf '%s\n' "$current" "$version" | sort -V | tail -n 1)" == "$version" ]]; then
+              sed -i "s/^version: .*/version: $version/" snap/snapcraft.yaml
+            fi
+
+  sync-3:
+    name: 🔄 Sync Audacity 3 (3)
+    if: github.ref == 'refs/heads/candidate'
+    environment: "3 Branch"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Sync version with upstream
+        uses: snapcrafters/ci/sync-version@main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDACITY_MAJOR: "3"
+        with:
+          branch: "3"
+          token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
+          update-script: |
+            set -euo pipefail
+
+            current=$(sed -nE 's/^version: ["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?$/\1/p' snap/snapcraft.yaml)
+            # Keep the maintenance branch on major version 3.
             if [[ ! "$current" =~ ^${AUDACITY_MAJOR}\.[0-9]+\.[0-9]+$ ]]; then
               echo "Skipping: the recipe is not on Audacity $AUDACITY_MAJOR."
               exit 0
