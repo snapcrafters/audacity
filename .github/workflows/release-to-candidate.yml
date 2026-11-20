@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  # Run the workflow each time new commits are pushed to the candidate branch.
   push:
-    branches: ["candidate"]
+    branches: ["3"]
   workflow_dispatch:
 
 concurrency:
@@ -11,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: read
   issues: write
 
@@ -27,17 +27,19 @@ jobs:
         uses: snapcrafters/ci/get-architectures@main
 
   release:
-    name: 🚢 Release to latest/candidate
+    name: 🚢 Release to 3/candidate
+    if: github.ref == 'refs/heads/3'
     needs: get-architectures
     runs-on: ubuntu-latest
-    environment: "Candidate Branch"
+    environment: "3 Branch"
     strategy:
       matrix:
         architecture: ${{ fromJSON(needs.get-architectures.outputs.architectures-list) }}
     steps:
-      - name: 🚢 Release to latest/candidate
+      - name: 🚢 Release to 3/candidate
         uses: snapcrafters/ci/release-to-candidate@main
         with:
+          channel: 3/candidate
           architecture: ${{ matrix.architecture }}
           launchpad-token: ${{ secrets.LP_BUILD_SECRET }}
           repo-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
@@ -46,7 +48,7 @@ jobs:
   call-for-testing:
     name: 📣 Create call for testing
     needs: [release, get-architectures]
-    environment: "Candidate Branch"
+    environment: "3 Branch"
     runs-on: ubuntu-latest
     outputs:
       issue-number: ${{ steps.issue.outputs.issue-number }}
@@ -55,18 +57,21 @@ jobs:
         id: issue
         uses: snapcrafters/ci/call-for-testing@main
         with:
+          channel: 3/candidate
+          promotion-channel: 3/stable
           architectures: ${{ needs.get-architectures.outputs.architectures }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   screenshots:
     name: 📸 Gather screenshots
     needs: call-for-testing
-    environment: "Candidate Branch"
+    environment: "3 Branch"
     runs-on: ubuntu-latest
     steps:
       - name: 📸 Gather screenshots
         uses: snapcrafters/ci/get-screenshots@main
         with:
+          channel: 3/candidate
           issue-number: ${{ needs.call-for-testing.outputs.issue-number }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           screenshots-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
