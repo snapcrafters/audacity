@@ -1,7 +1,6 @@
 name: Release
 
 on:
-  # Run the workflow each time new commits are pushed to the candidate branch.
   push:
     branches: ["candidate"]
   workflow_dispatch:
@@ -11,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: read
   issues: write
 
@@ -28,6 +28,7 @@ jobs:
 
   release:
     name: 🚢 Release to latest/candidate
+    if: github.ref == 'refs/heads/candidate'
     needs: get-architectures
     runs-on: ubuntu-latest
     environment: "Candidate Branch"
@@ -38,6 +39,7 @@ jobs:
       - name: 🚢 Release to latest/candidate
         uses: snapcrafters/ci/release-to-candidate@main
         with:
+          channel: latest/candidate
           architecture: ${{ matrix.architecture }}
           launchpad-token: ${{ secrets.LP_BUILD_SECRET }}
           repo-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
@@ -55,6 +57,8 @@ jobs:
         id: issue
         uses: snapcrafters/ci/call-for-testing@main
         with:
+          channel: latest/candidate
+          promotion-channel: latest/stable
           architectures: ${{ needs.get-architectures.outputs.architectures }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -67,6 +71,7 @@ jobs:
       - name: 📸 Gather screenshots
         uses: snapcrafters/ci/get-screenshots@main
         with:
+          channel: latest/candidate
           issue-number: ${{ needs.call-for-testing.outputs.issue-number }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           screenshots-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
