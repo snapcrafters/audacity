@@ -86,7 +86,7 @@ sudo chmod g+rw /dev/dri/render*
 
 Thanks for your interest! Below you find instructions to help you contribute to this snap.
 
-The general workflow is to submit pull requests that merges your changes into the `candidate` branch here on GitHub. Once the pull request has been merged, a GitHub action will automatically build the snap and publish it to the `candidate` channel in the Snap Store. Once the snap has been tested thoroughly, we promote it to the `stable` channel so all our users get it!
+Target the `candidate` branch for the default track or the `3` branch for Audacity 3 maintenance. Merges publish to `latest/candidate` or `3/candidate`, respectively. After testing, maintainers promote the tested revisions to `latest/stable` or `3/stable` from the corresponding call-for-testing issue.
 
 ### Initial setup
 
@@ -112,7 +112,7 @@ git fetch --all -p
 
 Now that your git metadata has been updated you are ready to create a bugfix branch, make your changes, and open a pull request.
 
-1. All pull requests should go to the stable branch so create your branch as a copy of the stable branch:
+1. Start from the branch for the track you are changing (this example uses `candidate`):
 
     ```shell
     git checkout -b my-bugfix-branch snapcrafters/candidate
@@ -131,10 +131,9 @@ Now that your git metadata has been updated you are ready to create a bugfix bra
     git push -u myfork my-bugfix-branch
     ```
 
-4. Then, [open up a pull request](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests) from your `my-bugfix-branch` to the `snapcrafters/candidate` branch.
+4. [Open a pull request](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests) against the same branch you started from: `candidate` or `3`.
 5. Once you've opened the pull request, it will automatically trigger the build-test action that will launch a build of the snap. You can watch the progress of the snap build from your pull request (Show all checks -> Details). Once the snap build has completed, you can find the built snap (to test with) under "Artifacts".
 6. Someone from the team will review the open pull request and either merge it or start a discussion with you with additional changes or clarification needed.
-7. Once the pull request has been merged into the stable branch, a GitHub action will rebuild the snap using your changes and publish it to the [Snap Store](https://snapcraft.io/audacity) into the `candidate` channel. After sufficient testing of the snap from the candidate channel, one of the maintainers or administrators will promote the snap to the stable branch in the Snap Store.
 
 ## Maintainers
 

@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  # Run the workflow each time new commits are pushed to the candidate branch.
   push:
-    branches: ["candidate"]
+    branches: ["candidate", "3"]
   workflow_dispatch:
 
 concurrency:
@@ -11,33 +10,38 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: read
   issues: write
 
 jobs:
   get-architectures:
     name: 🖥 Get snap architectures
+    if: github.ref == 'refs/heads/candidate' || github.ref == 'refs/heads/3'
     runs-on: ubuntu-latest
     outputs:
       architectures: ${{ steps.get-architectures.outputs.architectures }}
       architectures-list: ${{ steps.get-architectures.outputs.architectures-list }}
+      track: ${{ github.ref_name == '3' && '3' || 'latest' }}
+      environment: ${{ github.ref_name == '3' && '3 Branch' || 'Candidate Branch' }}
     steps:
       - name: 🖥 Get snap architectures
         id: get-architectures
         uses: snapcrafters/ci/get-architectures@main
 
   release:
-    name: 🚢 Release to latest/candidate
+    name: 🚢 Release to ${{ needs.get-architectures.outputs.track }}/candidate
     needs: get-architectures
     runs-on: ubuntu-latest
-    environment: "Candidate Branch"
+    environment: ${{ needs.get-architectures.outputs.environment }}
     strategy:
       matrix:
         architecture: ${{ fromJSON(needs.get-architectures.outputs.architectures-list) }}
     steps:
-      - name: 🚢 Release to latest/candidate
+      - name: 🚢 Release to candidate channel
         uses: snapcrafters/ci/release-to-candidate@main
         with:
+          channel: ${{ needs.get-architectures.outputs.track }}/candidate
           architecture: ${{ matrix.architecture }}
           launchpad-token: ${{ secrets.LP_BUILD_SECRET }}
           repo-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
@@ -46,7 +50,7 @@ jobs:
   call-for-testing:
     name: 📣 Create call for testing
     needs: [release, get-architectures]
-    environment: "Candidate Branch"
+    environment: ${{ needs.get-architectures.outputs.environment }}
     runs-on: ubuntu-latest
     outputs:
       issue-number: ${{ steps.issue.outputs.issue-number }}
@@ -55,18 +59,21 @@ jobs:
         id: issue
         uses: snapcrafters/ci/call-for-testing@main
         with:
+          channel: ${{ needs.get-architectures.outputs.track }}/candidate
+          promotion-channel: ${{ needs.get-architectures.outputs.track }}/stable
           architectures: ${{ needs.get-architectures.outputs.architectures }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   screenshots:
     name: 📸 Gather screenshots
-    needs: call-for-testing
-    environment: "Candidate Branch"
+    needs: [call-for-testing, get-architectures]
+    environment: ${{ needs.get-architectures.outputs.environment }}
     runs-on: ubuntu-latest
     steps:
       - name: 📸 Gather screenshots
         uses: snapcrafters/ci/get-screenshots@main
         with:
+          channel: ${{ needs.get-architectures.outputs.track }}/candidate
           issue-number: ${{ needs.call-for-testing.outputs.issue-number }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           screenshots-token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}

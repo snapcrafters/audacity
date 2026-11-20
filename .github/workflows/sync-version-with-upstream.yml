@@ -1,40 +1,61 @@
 name: Update
 
 on:
-  # Runs at 10:00 UTC every day
-  # Disable until 4.0.0 is reliable
-  # See https://github.com/snapcrafters/audacity/issues/91
-  #schedule:
-  #  - cron:  '0 10 * * *'
-  # Allows you to run this workflow manually from the Actions tab
+  schedule:
+    - cron: "0 10 * * *"
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  sync-candidate:
-    name: 🔄 Sync version with upstream
-    environment: "Candidate Branch"
+  sync:
+    name: 🔄 Sync Audacity ${{ matrix.major }} (${{ matrix.branch }})
+    # Scheduled runs and both branch updates are coordinated from the default branch.
+    if: github.ref == 'refs/heads/candidate'
+    environment: ${{ matrix.environment }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - branch: candidate
+            environment: Candidate Branch
+            major: "4"
+          - branch: "3"
+            environment: 3 Branch
+            major: "3"
     steps:
       - name: 🔄 Sync version with upstream
         uses: snapcrafters/ci/sync-version@main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDACITY_MAJOR: ${{ matrix.major }}
         with:
+          branch: ${{ matrix.branch }}
           token: ${{ secrets.SNAPCRAFTERS_BOT_COMMIT }}
           update-script: |
-            TAG=$(
-              curl --fail --silent --show-error --location \
-                "https://api.github.com/repos/audacity/audacity/releases/latest" |
-                jq --exit-status --raw-output \
-                  '.tag_name | select(type == "string" and startswith("Audacity-"))'
-            )
-            VERSION="${TAG#Audacity-}"
+            set -euo pipefail
 
-            if [[ ! "$VERSION" =~ ^[0-9]+([.][0-9]+){2}([+-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "Invalid upstream version: $VERSION" >&2
-              exit 1
+            current=$(sed -nE 's/^version: ["\x27]?([0-9]+\.[0-9]+\.[0-9]+)["\x27]?$/\1/p' snap/snapcraft.yaml)
+            # Do not bump the legacy candidate recipe to 4 before its packaging migration.
+            if [[ ! "$current" =~ ^${AUDACITY_MAJOR}\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Skipping: the recipe is not on Audacity $AUDACITY_MAJOR."
+              exit 0
             fi
 
-            sed -i 's/^\(version: \).*$/\1'"$VERSION"'/' snap/snapcraft.yaml
+            version=$(gh api --paginate 'repos/audacity/audacity/releases?per_page=100' \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+              sed -nE "s/^Audacity-(${AUDACITY_MAJOR}\.[0-9]+\.[0-9]+)$/\1/p" |
+              sort -V | tail -n 1)
+            if [[ -z "$version" ]]; then
+              echo "No stable Audacity $AUDACITY_MAJOR release found." >&2
+              exit 1
+            fi
+            if [[ "$version" != "$current" && "$(printf '%s\n' "$current" "$version" | sort -V | tail -n 1)" == "$version" ]]; then
+              sed -i "s/^version: .*/version: $version/" snap/snapcraft.yaml
+            fi
