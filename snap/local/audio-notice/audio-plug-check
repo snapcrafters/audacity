@@ -1,0 +1,88 @@
+#!/bin/bash
+# Audio-access check for the audacity snap (command-chain, runs before the
+# app, after the kde-neon-6 extension's desktop-launch so Qt is available).
+#
+# Successor of the alsa-mixin alsa-launch script's yad prompt (removed for
+# Qt6 in 0df8eaf): if the snap cannot reach the PulseAudio server socket,
+# explain which interfaces to connect before starting the app.
+#
+# snapd contract: each command-chain script receives the rest of the chain
+# (ultimately the app command) as arguments and MUST hand off with
+# `exec "$@"` to continue launching. Only a non-zero exit aborts the launch.
+# snapctl is available in command-chain - the old alsa-launch relied on it.
+
+set -u
+
+MARKER="$SNAP_USER_COMMON/skip-audio-dialog"
+MAX_RETRIES=3
+
+have_audio() {
+    # Test ONLY pulseaudio. audio-playback is not a stand-in for it: on
+    # Ubuntu 26.04 / current snapd a fresh `snap install --dangerous` of
+    # this snap comes with audio-playback auto-connected while pulseaudio
+    # is not, and without the pulse socket the ALSA host API's device
+    # probe still burns a 30 s timeout per device (PortAudio pa_linux_alsa
+    # via pcm_pulse: "PulseAudio: Unable to create stream: Timeout"),
+    # which presents as a ~20 min frozen startup. pulseaudio is what
+    # unblocks it (verified on 24.04 PipeWire-pulse and on 26.04).
+    snapctl is-connected pulseaudio 2>/dev/null
+}
+
+graphical() {
+    [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]
+}
+
+# Audio access present: nothing to say.
+if have_audio; then
+    exec "$@"
+fi
+
+# "Don't ask again" marker: pass through, with a note on stderr.
+if [ -f "$MARKER" ]; then
+    echo "audacity: pulseaudio interface not connected; playback/recording will not work." >&2
+    echo "audacity: fix with: sudo snap connect audacity:pulseaudio" >&2
+    exec "$@"
+fi
+
+# No display: terminal fallback when interactive (SSH), otherwise start the
+# app and let it surface its own errors.
+if ! graphical; then
+    if [ -t 0 ]; then
+        echo "Audacity: no audio interfaces connected."
+        echo "  sudo snap connect audacity:pulseaudio   # playback + recording"
+        echo "  sudo snap connect audacity:alsa         # direct ALSA devices (optional)"
+        while :; do
+            printf "[c]ontinue, [r]etry after connecting, [q]uit? "
+            IFS= read -r -n 1 ans || exit 1
+            echo
+            case "$ans" in
+                r|R) have_audio && exec "$@" ;;
+                q|Q) exit 1 ;;
+                *)   exec "$@" ;;
+            esac
+        done
+    fi
+    exec "$@"
+fi
+
+# Graphical session without audio access: show the dialog.
+#   0 = continue and ask next time; 201 = don't ask again; 202 = quit;
+#   200 = user connected the interfaces, re-test.
+i=1
+while [ "$i" -le "$MAX_RETRIES" ]; do
+    "$SNAP/bin/audio-notice"
+    rc=$?
+    case $rc in
+        0)   exec "$@" ;;
+        201) mkdir -p "$SNAP_USER_COMMON"
+             : > "$MARKER"
+             exec "$@" ;;
+        202) exit 1 ;;
+        200) have_audio && exec "$@" ;;
+        *)   exec "$@" ;;
+    esac
+    i=$((i + 1))
+done
+
+# User kept saying "re-test" without connecting: start anyway, their call.
+exec "$@"
