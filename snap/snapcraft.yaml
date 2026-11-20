@@ -27,7 +27,9 @@ compression: lzo
 
 platforms:
   amd64:
-  arm64:
+  # kde-qt6-core24-sdk not yet published for arm64,
+  # see https://invent.kde.org/neon/snap-packaging/kde-qt6-core-sdk/-/work_items/3
+  # arm64:
 
 layout:
   /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/alsa-lib:
