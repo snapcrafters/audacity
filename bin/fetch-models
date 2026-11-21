@@ -240,8 +240,8 @@ Unknown option ${model_selection} selected." ;;
 
 parse_params "$@"
 
-if ! grep -qw "GenuineIntel" /proc/cpuinfo; then
-  echo "The OpenVINO™ AI models are only supported on Intel hardware. Exiting."
+if ! grep -qw "avx2" /proc/cpuinfo; then
+  echo "The OpenVINO™ AI models require a CPU with AVX2 support. Exiting."
   exit 1
 fi
 
